@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PROCESS SYSTEMIZATION · TOC-1 MTA 2026</title>
+  <link rel="stylesheet" href="assets/app.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <strong>PROCESS SYSTEMIZATION</strong>
+      <span class="muted">· TOC-1 MTA 2026</span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab" data-view="dashboard" role="tab">DASHBOARD</button>
+      <button class="tab" data-view="master" role="tab">UPLOAD MASTER</button>
+      <button class="tab" data-view="progress" role="tab">UPLOAD PROGRESSION</button>
+    </nav>
+  </header>
+
+  <main id="view-root"></main>
+
+  <template id="tpl-master">
+    <section class="view">
+      <h1>UPLOAD MASTER DATA</h1>
+      <p class="muted">ไฟล์ <code>Ensdqfr05_Turnaround Work List form (&lt;project&gt;).xlsx</code> — header row 5, data row 6+, Col D = Tag no., Col I = System no. (split ตาม newline)</p>
+
+      <div class="card">
+        <div class="row">
+          <label>PROJECT
+            <select id="master-project">
+              <option value="CDU-1">CDU-1</option>
+              <option value="FCCU">FCCU</option>
+            </select>
+          </label>
+          <label class="filebox" id="master-filebox">
+            <input type="file" id="master-file" accept=".xlsx,.xls" />
+            <span><span class="fileicon">📄</span><span class="filebox-label">เลือกไฟล์ Excel หรือลากมาวาง...</span></span>
+          </label>
+        </div>
+        <div id="master-preview" class="preview muted">ยังไม่มีไฟล์</div>
+        <div class="action-row">
+          <button id="master-save" class="primary" disabled>บันทึกลงฐานข้อมูล</button>
+          <span class="spacer"></span>
+          <button id="master-clear" class="danger">🗑 ล้างของโครงการนี้</button>
+          <button id="master-clear-all" class="danger">⚠ ล้างทั้งหมด</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>สถานะปัจจุบัน</h2>
+        <div id="master-status"></div>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-progress">
+    <section class="view">
+      <h1>UPLOAD PROGRESSION (Multi-file)</h1>
+      <p class="muted">ไฟล์ <code>DisciplineTagNoTable_&lt;project&gt; &lt;discipline&gt;.xlsx</code> — ทุก sheet, header row 1, data row 2+, Col B = Tag, Col C = Plan%, Col D = Actual%</p>
+
+      <div class="card">
+        <div class="row">
+          <label>PROJECT
+            <select id="progress-project">
+              <option value="CDU-1">CDU-1</option>
+              <option value="FCCU">FCCU</option>
+            </select>
+          </label>
+          <label class="filebox" id="progress-filebox">
+            <input type="file" id="progress-files" accept=".xlsx,.xls" multiple />
+            <span><span class="fileicon">📄</span><span class="filebox-label">เลือกหลายไฟล์ได้ หรือลากมาวาง...</span></span>
+          </label>
+        </div>
+        <div id="progress-preview" class="preview muted">ยังไม่มีไฟล์</div>
+        <div class="action-row">
+          <button id="progress-save" class="primary" disabled>บันทึกลงฐานข้อมูล</button>
+          <span class="spacer"></span>
+          <button id="progress-clear" class="danger">🗑 ล้างของโครงการนี้</button>
+          <button id="progress-clear-all" class="danger">⚠ ล้างทั้งหมด</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>ไฟล์ที่ upload แล้ว</h2>
+        <div id="progress-status"></div>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-dashboard">
+    <section class="view">
+      <h1>DASHBOARD</h1>
+
+      <div class="kpis">
+        <div class="kpi" data-project="CDU-1" data-status="">
+          <div class="kpi-head">
+            <span class="kpi-title">CDU-1</span>
+            <span class="status-badge" data-status="">— NO DATA</span>
+          </div>
+          <div class="kpi-value"><span class="actual">—</span></div>
+          <div class="kpi-delta flat">—</div>
+          <div class="kpi-planactual">
+            <span><span class="label">Plan</span> <span class="val plan">—</span></span>
+            <span><span class="label">Actual</span> <span class="val actual-inline">—</span></span>
+          </div>
+          <div class="bar"><span style="width:0%"></span></div>
+          <div class="kpi-sub">
+            <span class="kpi-at-risk"></span>
+            <span class="meta muted">no data</span>
+          </div>
+        </div>
+        <div class="kpi" data-project="FCCU" data-status="">
+          <div class="kpi-head">
+            <span class="kpi-title">FCCU</span>
+            <span class="status-badge" data-status="">— NO DATA</span>
+          </div>
+          <div class="kpi-value"><span class="actual">—</span></div>
+          <div class="kpi-delta flat">—</div>
+          <div class="kpi-planactual">
+            <span><span class="label">Plan</span> <span class="val plan">—</span></span>
+            <span><span class="label">Actual</span> <span class="val actual-inline">—</span></span>
+          </div>
+          <div class="bar"><span style="width:0%"></span></div>
+          <div class="kpi-sub">
+            <span class="kpi-at-risk"></span>
+            <span class="meta muted">no data</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="status-legend">
+        <div class="legend-row">
+          <span class="legend-title">เกณฑ์ Status:</span>
+          <span class="legend-item">
+            <span class="status-badge" data-status="behind">⚠ BEHIND</span>
+            <span class="muted">%Actual &lt; %Plan</span>
+          </span>
+          <span class="legend-item">
+            <span class="status-badge" data-status="on-track">✓ ON TRACK</span>
+            <span class="muted">%Actual = %Plan</span>
+          </span>
+          <span class="legend-item">
+            <span class="status-badge" data-status="ahead">▲ AHEAD</span>
+            <span class="muted">%Actual &gt; %Plan</span>
+          </span>
+          <span class="muted" style="font-size:11px">(เทียบค่าที่แสดงในหน้าจอตรงๆ ปัดเศษ 2 ทศนิยม · 0.01% precision)</span>
+        </div>
+        <div class="legend-row legend-examples muted">
+          <span class="legend-title">สูตร:</span>
+          <span><strong>Tag%</strong> = mean ของ records ใน tag</span>
+          <span class="legend-sep">·</span>
+          <span><strong>System%</strong> = mean ของ Tag means (ทุก tag น้ำหนักเท่ากัน)</span>
+          <span class="legend-sep">·</span>
+          <span><strong>Project%</strong> = mean ของ System means + Unmapped 1 pseudo-system</span>
+        </div>
+        <div class="legend-row legend-examples muted">
+          <span class="legend-title">ตัวอย่าง:</span>
+          <span>Plan <strong>60.00%</strong>, Actual <strong>50.00%</strong> → <strong style="color:var(--rag-red)">BEHIND</strong></span>
+          <span class="legend-sep">·</span>
+          <span>Plan <strong>60.00%</strong>, Actual <strong>60.00%</strong> → <strong style="color:var(--rag-green)">ON TRACK</strong></span>
+          <span class="legend-sep">·</span>
+          <span>Plan <strong>60.00%</strong>, Actual <strong>60.01%</strong> → <strong style="color:var(--rag-blue)">AHEAD</strong> (แม้ห่างกัน 0.01)</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="filter-bar">
+          <div class="row toolbar">
+            <label>Project
+              <select id="filter-project">
+                <option value="">ทั้งหมด</option>
+                <option value="CDU-1">CDU-1</option>
+                <option value="FCCU">FCCU</option>
+              </select>
+            </label>
+            <label>Discipline
+              <select id="filter-discipline">
+                <option value="">ทั้งหมด</option>
+              </select>
+            </label>
+            <label class="grow">ค้นหา Tag / System
+              <input id="filter-search" type="search" placeholder="เช่น E-0106 หรือ 010-P01-01" />
+            </label>
+            <label>เรียงลำดับ
+              <select id="filter-sort">
+                <option value="progress-asc">Progress ↑ (worst first)</option>
+                <option value="progress-desc">Progress ↓ (best first)</option>
+                <option value="delta-asc">Delta ↑ (most behind first)</option>
+                <option value="name">System name</option>
+                <option value="tags-desc">Tag count ↓</option>
+              </select>
+            </label>
+          </div>
+          <div class="filter-chips" id="filter-chips"></div>
+        </div>
+      </div>
+
+      <div class="result-bar">
+        <div class="result-count" id="result-count">—</div>
+        <div class="result-actions">
+          <span class="muted" id="last-refresh" style="font-size:11px"></span>
+          <button id="refresh-btn" class="ghost" title="โหลดข้อมูลใหม่จาก IndexedDB">🔄 Refresh</button>
+          <button id="expand-all" class="ghost">Expand all</button>
+          <button id="collapse-all" class="ghost">Collapse all</button>
+          <button id="export-btn" class="ghost">Export xlsx ⤓</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div id="hierarchy" class="hierarchy"></div>
+      </div>
+    </section>
+  </template>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="js/store.js"></script>
+  <script src="js/parseMaster.js"></script>
+  <script src="js/parseProgress.js"></script>
+  <script src="js/views/upload-master.js"></script>
+  <script src="js/views/upload-progress.js"></script>
+  <script src="js/views/dashboard.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# OneDrive sync conflicts (brackets escaped — they are gitignore char classes)
+*-conflict-*
+*_conflict_*
+*\[Conflict\]*
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+
+# Claude Code (keep shared settings.json; ignore user-local)
+.claude/settings.local.json
+.claude/.credentials.json
+
+# Node (in case any tooling is added later)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Logs
+*.log
+logs/
+
+# Env files (don't commit secrets)
+.env
+.env.*
+!.env.example
+
+# Local data / sample workbooks (project data lives outside the repo;
+# don't accidentally commit any copied into webapp/)
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+
+# Optional vendored CDN libs (use CDN by default — only vendor for offline)
+assets/vendor/*
+!assets/vendor/.gitkeep
+
+# Build / coverage (placeholders for future tooling)
+dist/
+build/
+coverage/
+.cache/
