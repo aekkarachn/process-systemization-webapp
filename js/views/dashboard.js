@@ -82,7 +82,7 @@
     progress: [],
     expandedProjects: new Set(["CDU-1", "FCCU"]),
     expandedSystems: new Set(),
-    filter: { project: "", discipline: "", search: "", sort: "progress-asc" },
+    filter: { project: "", system: "", discipline: "", search: "", sort: "progress-asc" },
     tagSort: { col: "tag", dir: "asc" }, // sort state for the tag drill-down tables (global, applied to all)
   };
 
@@ -101,15 +101,6 @@
       m.set(x.project + "|" + x.tag, x.systems || []);
     }
     return m;
-  }
-
-  // Compute simple-average means on a node with planSum / actualSum / recordCount.
-  function meanOf(node) {
-    if (!node || !node.recordCount) return { plan: null, actual: null };
-    return {
-      plan: node.planSum / node.recordCount,
-      actual: node.actualSum / node.recordCount,
-    };
   }
 
   function aggregate() {
@@ -143,7 +134,22 @@
       const actual = +rec.actual || 0;
 
       const systems = tagSystems.get(rec.project + "|" + rec.tag) || [];
-      const buckets = systems.length ? systems : ["__UNMAPPED__"];
+      // Apply System filter: keep only records whose tag maps to the chosen system
+      // (or has no mapping when "__UNMAPPED__" is chosen).
+      if (state.filter.system) {
+        if (state.filter.system === "__UNMAPPED__") {
+          if (systems.length) continue;
+        } else if (!systems.includes(state.filter.system)) {
+          continue;
+        }
+      }
+      // When a specific system is chosen, only contribute to that single bucket
+      // (tag-in-multiple-systems shouldn't fan out to siblings while filtered).
+      const buckets = systems.length
+        ? (state.filter.system && state.filter.system !== "__UNMAPPED__"
+            ? [state.filter.system]
+            : systems)
+        : ["__UNMAPPED__"];
       const target = systems.length ? proj.systems : proj.unmapped;
       for (const sys of buckets) {
         if (!target.has(sys)) {
@@ -286,6 +292,31 @@
     }
   }
 
+  // Populate the System dropdown from master.systems (filtered by current Project filter).
+  // Also validates state.filter.system: clears it if no longer present in the new option list
+  // (e.g. user changed Project so the previously-selected system isn't available anymore).
+  function renderSystemFilter() {
+    const sel = $("filter-system");
+    if (!sel) return;
+    const projectFilter = state.filter.project;
+    const systemsSet = new Set();
+    for (const m of state.masters) {
+      if (projectFilter && m.project !== projectFilter) continue;
+      for (const s of (m.systems || [])) systemsSet.add(s);
+    }
+    const sorted = Array.from(systemsSet).sort(systemSort);
+    const opts = ['<option value="">ทั้งหมด</option>'];
+    for (const s of sorted) {
+      opts.push(`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`);
+    }
+    opts.push(`<option value="__UNMAPPED__">(ไม่ map กับ system ใด)</option>`);
+    sel.innerHTML = opts.join("");
+    if (state.filter.system && state.filter.system !== "__UNMAPPED__" && !systemsSet.has(state.filter.system)) {
+      state.filter.system = "";
+    }
+    sel.value = state.filter.system;
+  }
+
   function renderDisciplineFilter(allDisciplines) {
     const sel = $("filter-discipline");
     const current = sel.value;
@@ -301,6 +332,7 @@
     const root = $("filter-chips");
     const chips = [];
     if (state.filter.project) chips.push({ label: `โครงการ: ${state.filter.project}`, key: "project" });
+    if (state.filter.system) chips.push({ label: `System: ${state.filter.system === "__UNMAPPED__" ? "(unmapped)" : state.filter.system}`, key: "system" });
     if (state.filter.discipline) chips.push({ label: `Discipline: ${state.filter.discipline}`, key: "discipline" });
     if (state.filter.search) chips.push({ label: `Search: ${state.filter.search}`, key: "search" });
     if (!chips.length) { root.innerHTML = ""; return; }
@@ -334,28 +366,33 @@
     return String(a).localeCompare(String(b), undefined, { numeric: true });
   }
 
-  // Sort tag entries based on state.tagSort (applied to all tag drill-down tables).
-  function sortTags(entries) {
+  // Sort flat record list based on state.tagSort (applied to all drill-down tables).
+  // Each entry is a record annotated with .tag (the parent tag's name).
+  function sortRecords(records) {
     const { col, dir } = state.tagSort;
     const factor = dir === "asc" ? 1 : -1;
-    const arr = entries.slice();
+    const arr = records.slice();
     if (col === "tag") {
       arr.sort((x, y) => factor * String(x.tag).localeCompare(String(y.tag), undefined, { numeric: true }));
       return arr;
     }
+    if (col === "status") {
+      // Order: behind (worst) → on-track → ahead → none (no data). Ascending = worst first.
+      const order = { behind: 0, "on-track": 1, ahead: 2, none: 3 };
+      arr.sort((x, y) => {
+        const sx = statusFromValues(Number(x.actual), Number(x.plan));
+        const sy = statusFromValues(Number(y.actual), Number(y.plan));
+        return factor * (order[sx] - order[sy]);
+      });
+      return arr;
+    }
     arr.sort((x, y) => {
-      const mx = meanOf(x), my = meanOf(y);
       let av, bv;
-      if (col === "plan") { av = mx.plan; bv = my.plan; }
-      else if (col === "actual") { av = mx.actual; bv = my.actual; }
-      else if (col === "delta") {
-        av = mx.plan != null ? mx.actual - mx.plan : null;
-        bv = my.plan != null ? my.actual - my.plan : null;
-      }
-      // Treat null as -Infinity for asc (pushed to bottom of "asc" results when reversed).
-      if (av == null && bv == null) return 0;
-      if (av == null) return 1;
-      if (bv == null) return -1;
+      if (col === "plan") { av = Number(x.plan); bv = Number(y.plan); }
+      else if (col === "actual") { av = Number(x.actual); bv = Number(y.actual); }
+      if (isNaN(av) && isNaN(bv)) return 0;
+      if (isNaN(av)) return 1;
+      if (isNaN(bv)) return -1;
       return factor * (av - bv);
     });
     return arr;
@@ -407,29 +444,27 @@
         const p = fmtPct(sg.planMean);
         const delta = fmtDeltaShort(a.raw, p.raw, a.has, p.has);
         const status = statusFromValues(a.has ? a.raw : null, p.has ? p.raw : null);
-        const tagEntries = sortTags(Array.from(sg.tags.values()));
-        const tagRows = tagEntries.flatMap((tg) => {
-          const tm = meanOf(tg);
-          const tagA = fmtPct(tm.actual);
-          const tagP = fmtPct(tm.plan);
-          const tagD = fmtDeltaShort(tagA.raw, tagP.raw, tagA.has, tagP.has);
-          return tg.records.map((rec, i) => {
-            const behindCls = (Number(rec.actual) < Number(rec.plan)) ? "row-behind" : "";
-            return `
+        // Flatten records across all tags in this system — 1 row per record (no tag aggregation).
+        const flatRecords = [];
+        for (const tg of sg.tags.values()) {
+          for (const rec of tg.records) flatRecords.push({ tag: tg.tag, ...rec });
+        }
+        const sortedRecords = sortRecords(flatRecords);
+        const tagRows = sortedRecords.map((rec) => {
+          const recP = fmtPct(Number(rec.plan));
+          const recA = fmtPct(Number(rec.actual));
+          const recStatus = statusFromValues(recA.has ? recA.raw : null, recP.has ? recP.raw : null);
+          const behindCls = recStatus === "behind" ? "row-behind" : "";
+          return `
             <tr class="${behindCls}">
-              ${i === 0 ? `
-                <td rowspan="${tg.records.length}"><strong>${escapeHtml(tg.tag)}</strong></td>
-                <td rowspan="${tg.records.length}" class="num">${tagP.text}</td>
-                <td rowspan="${tg.records.length}" class="num">${tagA.text}</td>
-                <td rowspan="${tg.records.length}" class="num sys-delta ${tagD.cls}">${tagD.text}</td>
-              ` : ""}
+              <td><strong>${escapeHtml(rec.tag)}</strong></td>
               <td>${escapeHtml(rec.discipline)}</td>
               <td>${escapeHtml(rec.equipmentType)}</td>
-              <td class="num">${rec.plan}</td>
-              <td class="num">${rec.actual}</td>
+              <td class="num">${recP.text}</td>
+              <td class="num">${recA.text}</td>
+              <td class="col-status"><span class="sys-status" data-status="${recStatus}">${statusLabel(recStatus)}</span></td>
             </tr>
           `;
-          });
         }).join("");
         const sysKey = pname + "|" + sg.system;
         const open = state.expandedSystems.has(sysKey) ? "open" : "";
@@ -446,7 +481,7 @@
               <div class="sys-row1">
                 <span class="collapse-icon"></span>
                 <span class="sys-name">${escapeHtml(sysLabel)}</span>
-                <span class="sys-meta">${tagEntries.length} tags · ${sg.recordCount} records</span>
+                <span class="sys-meta">${sg.tags.size} tags · ${sg.recordCount} records</span>
                 <span class="sys-status" data-status="${status}">${statusLabel(status)}</span>
               </div>
               <div class="sys-row2">
@@ -469,13 +504,11 @@
               <table class="data">
                 <thead><tr>
                   ${th("tag", "Tag", false)}
-                  ${th("plan", "Plan %", true)}
-                  ${th("actual", "Actual %", true)}
-                  ${th("delta", "Δ", true)}
                   <th>Discipline</th>
                   <th>Equipment / Sheet</th>
-                  <th class="num">Rec Plan</th>
-                  <th class="num">Rec Actual</th>
+                  ${th("plan", "Plan %", true)}
+                  ${th("actual", "Actual %", true)}
+                  ${th("status", "Status", false)}
                 </tr></thead>
                 <tbody>${tagRows}</tbody>
               </table>
@@ -513,6 +546,9 @@
     await loadData();
     // Guard: if Dashboard view not currently mounted, skip DOM updates (still keep state fresh for next mount).
     if (!$("hierarchy")) return;
+    // System filter is derived from masters and may need to clear stale value
+    // before aggregate() reads it — call this first.
+    renderSystemFilter();
     const { projects, allDisciplines, filteredRecordCount } = aggregate();
     renderDisciplineFilter(allDisciplines);
     renderFilterChips();
@@ -573,6 +609,7 @@
 
   function onFilterChange() {
     state.filter.project = $("filter-project").value;
+    state.filter.system = $("filter-system").value;
     state.filter.discipline = $("filter-discipline").value;
     state.filter.search = $("filter-search").value.trim();
     state.filter.sort = $("filter-sort").value;
@@ -584,9 +621,10 @@
     if (!btn) return;
     const key = btn.dataset.clear;
     if (key === "all") {
-      state.filter.project = ""; state.filter.discipline = ""; state.filter.search = "";
-      $("filter-project").value = ""; $("filter-discipline").value = ""; $("filter-search").value = "";
+      state.filter.project = ""; state.filter.system = ""; state.filter.discipline = ""; state.filter.search = "";
+      $("filter-project").value = ""; $("filter-system").value = ""; $("filter-discipline").value = ""; $("filter-search").value = "";
     } else if (key === "project") { state.filter.project = ""; $("filter-project").value = ""; }
+    else if (key === "system") { state.filter.system = ""; $("filter-system").value = ""; }
     else if (key === "discipline") { state.filter.discipline = ""; $("filter-discipline").value = ""; }
     else if (key === "search") { state.filter.search = ""; $("filter-search").value = ""; }
     render();
@@ -609,44 +647,27 @@
   function exportXlsx() {
     const { projects } = aggregate();
     const rows = [[
-      "Project", "System", "Tag", "Discipline", "Equipment/Sheet",
-      "Rec Plan", "Rec Actual",
-      "Tag Plan %", "Tag Actual %", "Tag Delta",
-      "System Plan %", "System Actual %", "System Delta",
-      "Project Plan %", "Project Actual %", "Project Delta",
+      "Project", "System", "Tag", "Discipline", "Equipment / Sheet",
+      "Plan %", "Actual %", "Status",
     ]];
     for (const [pname, proj] of projects) {
-      const pPlan = proj.planMean ?? 0;
-      const pAct = proj.actualMean ?? 0;
-      const pDelta = pAct - pPlan;
       const all = [...proj.systems.values(), ...proj.unmapped.values()];
       for (const sg of all) {
-        const sPlan = sg.planMean ?? 0;
-        const sAct = sg.actualMean ?? 0;
-        const sDelta = sAct - sPlan;
+        const sysName = sg.system === "__UNMAPPED__" ? "(unmapped)" : sg.system;
         for (const tg of sg.tags.values()) {
-          const tm = meanOf(tg);
-          const tPlan = tm.plan ?? 0;
-          const tAct = tm.actual ?? 0;
-          const tDelta = tAct - tPlan;
           for (const rec of tg.records) {
+            const planR = round2(Number(rec.plan));
+            const actR = round2(Number(rec.actual));
+            const recStatus = statusFromValues(actR, planR);
             rows.push([
               pname,
-              sg.system === "__UNMAPPED__" ? "(unmapped)" : sg.system,
+              sysName,
               tg.tag,
               rec.discipline,
               rec.equipmentType,
-              rec.plan,
-              rec.actual,
-              Math.round(tPlan * 100) / 100,
-              Math.round(tAct * 100) / 100,
-              Math.round(tDelta * 100) / 100,
-              Math.round(sPlan * 100) / 100,
-              Math.round(sAct * 100) / 100,
-              Math.round(sDelta * 100) / 100,
-              Math.round(pPlan * 100) / 100,
-              Math.round(pAct * 100) / 100,
-              Math.round(pDelta * 100) / 100,
+              planR,
+              actR,
+              statusLabel(recStatus),
             ]);
           }
         }
@@ -662,6 +683,7 @@
   function mount() {
     $("hierarchy").addEventListener("click", onToggle);
     $("filter-project").addEventListener("change", onFilterChange);
+    $("filter-system").addEventListener("change", onFilterChange);
     $("filter-discipline").addEventListener("change", onFilterChange);
     $("filter-sort").addEventListener("change", onFilterChange);
     $("filter-search").addEventListener("input", debounce(onFilterChange, 200));

@@ -150,6 +150,25 @@ button.danger:hover:not(:disabled) {
   border-color: var(--rag-red);
 }
 
+.next-step {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+.next-step .next-btn {
+  display: inline-block;
+  padding: 10px 18px;
+  border-radius: 6px;
+  background: var(--primary);
+  color: white;
+  border: 1px solid var(--primary);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.next-step .next-btn:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+
 .action-row {
   display: flex;
   align-items: center;
@@ -208,6 +227,8 @@ table.data th {
 }
 table.data tr:hover td { background: #fafbfd; }
 table.data td.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.data th.num { text-align: right; }
+table.data th[data-tag-sort="status"], table.data td.col-status { text-align: center; }
 
 table.data tr.row-behind td { background: var(--rag-red-bg); color: #991b1b; }
 table.data tr.row-behind:hover td { background: #fee2e2; }

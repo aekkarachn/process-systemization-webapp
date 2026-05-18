@@ -20,7 +20,7 @@
 
   function currentRoute() {
     const h = location.hash.replace(/^#\/?/, "");
-    return VIEWS[h] ? h : "dashboard";
+    return VIEWS[h] ? h : "master";
   }
 
   // Toast helper, exposed globally
@@ -33,6 +33,15 @@
       el.className = "toast " + (kind || "");
     }, 3000);
   };
+
+  // Warn before refresh/close if session has data — data lives only in memory
+  // and would be lost on reload.
+  window.addEventListener("beforeunload", (e) => {
+    if (window.Store && Store.hasData && Store.hasData()) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
 
   document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".tab").forEach((t) => {

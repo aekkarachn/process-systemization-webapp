@@ -36,7 +36,7 @@
 
     const existing = existingMasterCount(project);
     const warnHtml = existing
-      ? `<div class="preview-warning">⚠ จะเขียนทับ master เดิมของ ${escapeHtml(project)} (${existing} tags) — กดยืนยันบันทึก เพื่อแทนที่</div>`
+      ? `<div class="preview-warning">⚠ จะแทนที่ master ของ ${escapeHtml(project)} ที่โหลดอยู่ (${existing} tags)</div>`
       : "";
 
     el.className = "preview ok";
@@ -52,7 +52,7 @@
     const el = $("master-status");
     cachedSummary = await Store.masterSummary();
     if (!cachedSummary.length) {
-      el.innerHTML = `<div class="empty">ยังไม่มี master data ในฐานข้อมูล</div>`;
+      el.innerHTML = `<div class="empty">ยังไม่มี master data ใน session — กดโหลดไฟล์ก่อน</div>`;
       return;
     }
     cachedSummary.sort((a, b) => a.project.localeCompare(b.project));
@@ -71,6 +71,9 @@
           `).join("")}
         </tbody>
       </table>
+      <div class="next-step">
+        <a href="#/progress" class="primary next-btn">ต่อไป: Upload Progression →</a>
+      </div>
     `;
   }
 
@@ -101,13 +104,9 @@
   async function onSave() {
     if (!pendingParse) return;
     const { file, project, result } = pendingParse;
-    const existing = existingMasterCount(project);
-    if (existing && !confirm(`โครงการ ${project} มี master เดิม ${existing} tags อยู่แล้ว — ยืนยันเขียนทับด้วย ${result.records.length} tags ใหม่?`)) {
-      return;
-    }
     try {
       const n = await Store.replaceMasters(project, file.name, result.records);
-      toast(`บันทึก ${n} tags ของ ${project} เรียบร้อย`, "ok");
+      toast(`โหลด ${n} tags ของ ${project} เรียบร้อย`, "ok");
       pendingParse = null;
       $("master-file").value = "";
       $("master-save").disabled = true;
@@ -117,7 +116,7 @@
       window.dispatchEvent(new CustomEvent("data:masters-changed", { detail: { project } }));
     } catch (err) {
       console.error(err);
-      toast("บันทึกไม่สำเร็จ: " + err.message, "err");
+      toast("โหลดไม่สำเร็จ: " + err.message, "err");
     }
   }
 
@@ -146,8 +145,7 @@
       return;
     }
     const projectList = cachedSummary.map((s) => `${s.project} (${s.tags} tags)`).join(", ");
-    if (!confirm(`⚠ ลบ master data ทุกโครงการ?\n\n${projectList}\n\nรวม ${totalTags} tags — ยืนยัน?`)) return;
-    if (!confirm(`ยืนยันอีกครั้ง: จะลบ ${totalTags} tags ของทุกโครงการ ไม่สามารถกู้คืนได้`)) return;
+    if (!confirm(`ล้าง master data ทุกโครงการ?\n${projectList}\nรวม ${totalTags} tags`)) return;
     try {
       await Store.clearAllMasters();
       toast(`ล้าง master data ทั้งหมด (${totalTags} tags) แล้ว`, "ok");

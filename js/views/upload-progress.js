@@ -46,7 +46,7 @@
           ${pending.map((p) => {
             const exist = existingFile(p.project, p.file.name);
             const status = exist
-              ? `<span style="color:var(--rag-amber);font-weight:600">⚠ จะเขียนทับ (เคยอัปเมื่อ ${new Date(exist.uploadedAt).toLocaleString()})</span>`
+              ? `<span style="color:var(--rag-amber);font-weight:600">⚠ จะแทนที่ของเดิมใน session (โหลดเมื่อ ${new Date(exist.uploadedAt).toLocaleTimeString()})</span>`
               : `<span style="color:var(--rag-green)">✓ ไฟล์ใหม่</span>`;
             const warn = p.result.warnings.length ? `<br/><span class="muted" style="font-size:11px">${escapeHtml(p.result.warnings.join(" · "))}</span>` : "";
             return `
@@ -62,8 +62,8 @@
           }).join("")}
         </tbody>
       </table>
-      ${projectMismatch.length ? `<div class="preview-warning">⚠ ${projectMismatch.length} ไฟล์ชื่อบ่งบอกโครงการอื่น — จะถูก save ใน ${escapeHtml(pending[0].project)} ตามที่เลือกไว้</div>` : ""}
-      ${reUploads.length ? `<div class="preview-warning">⚠ ${reUploads.length} ไฟล์เคยอัปแล้ว — กดบันทึกเพื่อ <strong>เขียนทับ</strong> ของเดิม</div>` : ""}
+      ${projectMismatch.length ? `<div class="preview-warning">⚠ ${projectMismatch.length} ไฟล์ชื่อบ่งบอกโครงการอื่น — จะโหลดเข้า ${escapeHtml(pending[0].project)} ตามที่เลือกไว้</div>` : ""}
+      ${reUploads.length ? `<div class="preview-warning">⚠ ${reUploads.length} ไฟล์ชื่อซ้ำกับที่โหลดอยู่ — กดโหลดข้อมูลเพื่อ <strong>แทนที่</strong></div>` : ""}
     `;
     $("progress-save").disabled = totalRecords === 0;
   }
@@ -72,7 +72,7 @@
     const el = $("progress-status");
     cachedSummary = await Store.progressFileSummary();
     if (!cachedSummary.length) {
-      el.innerHTML = `<div class="empty">ยังไม่มี progression data ในฐานข้อมูล</div>`;
+      el.innerHTML = `<div class="empty">ยังไม่มี progression data ใน session — กดโหลดไฟล์ก่อน</div>`;
       return;
     }
     cachedSummary.sort((a, b) => a.project.localeCompare(b.project) || a.sourceFile.localeCompare(b.sourceFile));
@@ -91,6 +91,9 @@
           `).join("")}
         </tbody>
       </table>
+      <div class="next-step">
+        <a href="#/dashboard" class="primary next-btn">ต่อไป: ดู Dashboard →</a>
+      </div>
     `;
   }
 
@@ -120,10 +123,6 @@
   async function onSave() {
     if (!pending.length) return;
     const project = $("progress-project").value;
-    const reUploads = pending.filter((p) => existingFile(p.project, p.file.name));
-    if (reUploads.length && !confirm(`${reUploads.length} ไฟล์เคยอัปแล้ว จะเขียนทับของเดิม — ยืนยันบันทึก?`)) {
-      return;
-    }
     let savedFiles = 0, savedRecords = 0;
     for (const p of pending) {
       try {
@@ -132,10 +131,10 @@
         savedFiles++;
       } catch (err) {
         console.error(err);
-        toast(`Save ${p.file.name} failed: ${err.message}`, "err");
+        toast(`โหลด ${p.file.name} ไม่สำเร็จ: ${err.message}`, "err");
       }
     }
-    toast(`บันทึก ${savedFiles}/${pending.length} ไฟล์ · ${savedRecords} records`, savedFiles === pending.length ? "ok" : "err");
+    toast(`โหลด ${savedFiles}/${pending.length} ไฟล์ · ${savedRecords} records`, savedFiles === pending.length ? "ok" : "err");
     pending = [];
     $("progress-files").value = "";
     setFileboxLabel("เลือกหลายไฟล์ได้ หรือลากมาวาง...", false);
@@ -175,8 +174,7 @@
       byProject[s.project] += s.tags;
     }
     const projectList = Object.entries(byProject).map(([p, n]) => `${p} (${n} records)`).join(", ");
-    if (!confirm(`⚠ ลบ progression data ทุกโครงการ?\n\n${projectList}\n\nรวม ${totalFiles} ไฟล์ · ${totalRecords} records — ยืนยัน?`)) return;
-    if (!confirm(`ยืนยันอีกครั้ง: จะลบ ${totalFiles} ไฟล์ ของทุกโครงการ ไม่สามารถกู้คืนได้`)) return;
+    if (!confirm(`ล้าง progression data ทุกโครงการ?\n${projectList}\nรวม ${totalFiles} ไฟล์ · ${totalRecords} records`)) return;
     try {
       await Store.clearAllProgress();
       toast(`ล้าง progression data ทั้งหมด (${totalFiles} ไฟล์) แล้ว`, "ok");

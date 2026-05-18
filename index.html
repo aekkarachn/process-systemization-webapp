@@ -15,9 +15,9 @@
       <span class="muted">· TOC-1 MTA 2026</span>
     </div>
     <nav class="tabs" role="tablist">
-      <button class="tab" data-view="dashboard" role="tab">DASHBOARD</button>
       <button class="tab" data-view="master" role="tab">UPLOAD MASTER</button>
       <button class="tab" data-view="progress" role="tab">UPLOAD PROGRESSION</button>
+      <button class="tab" data-view="dashboard" role="tab">DASHBOARD</button>
     </nav>
   </header>
 
@@ -43,15 +43,15 @@
         </div>
         <div id="master-preview" class="preview muted">ยังไม่มีไฟล์</div>
         <div class="action-row">
-          <button id="master-save" class="primary" disabled>บันทึกลงฐานข้อมูล</button>
+          <button id="master-save" class="primary" disabled>โหลดข้อมูล</button>
           <span class="spacer"></span>
-          <button id="master-clear" class="danger">🗑 ล้างของโครงการนี้</button>
-          <button id="master-clear-all" class="danger">⚠ ล้างทั้งหมด</button>
+          <button id="master-clear" class="danger">🗑 ล้างข้อมูลโครงการนี้</button>
+          <button id="master-clear-all" class="danger">ล้างทั้งหมด</button>
         </div>
       </div>
 
       <div class="card">
-        <h2>สถานะปัจจุบัน</h2>
+        <h2>ข้อมูลที่โหลดอยู่ใน session</h2>
         <div id="master-status"></div>
       </div>
     </section>
@@ -77,15 +77,15 @@
         </div>
         <div id="progress-preview" class="preview muted">ยังไม่มีไฟล์</div>
         <div class="action-row">
-          <button id="progress-save" class="primary" disabled>บันทึกลงฐานข้อมูล</button>
+          <button id="progress-save" class="primary" disabled>โหลดข้อมูล</button>
           <span class="spacer"></span>
-          <button id="progress-clear" class="danger">🗑 ล้างของโครงการนี้</button>
-          <button id="progress-clear-all" class="danger">⚠ ล้างทั้งหมด</button>
+          <button id="progress-clear" class="danger">🗑 ล้างข้อมูลโครงการนี้</button>
+          <button id="progress-clear-all" class="danger">ล้างทั้งหมด</button>
         </div>
       </div>
 
       <div class="card">
-        <h2>ไฟล์ที่ upload แล้ว</h2>
+        <h2>ไฟล์ที่โหลดอยู่ใน session</h2>
         <div id="progress-status"></div>
       </div>
     </section>
@@ -177,6 +177,11 @@
                 <option value="FCCU">FCCU</option>
               </select>
             </label>
+            <label>System
+              <select id="filter-system">
+                <option value="">ทั้งหมด</option>
+              </select>
+            </label>
             <label>Discipline
               <select id="filter-discipline">
                 <option value="">ทั้งหมด</option>
@@ -203,7 +208,7 @@
         <div class="result-count" id="result-count">—</div>
         <div class="result-actions">
           <span class="muted" id="last-refresh" style="font-size:11px"></span>
-          <button id="refresh-btn" class="ghost" title="โหลดข้อมูลใหม่จาก IndexedDB">🔄 Refresh</button>
+          <button id="refresh-btn" class="ghost" title="รีเฟรชหน้าจอ">🔄 Refresh</button>
           <button id="expand-all" class="ghost">Expand all</button>
           <button id="collapse-all" class="ghost">Collapse all</button>
           <button id="export-btn" class="ghost">Export xlsx ⤓</button>
@@ -218,7 +223,7 @@
 
   <div id="toast" class="toast"></div>
 
-  <script src="js/store.js"></script>
+  <script src="js/sessionState.js"></script>
   <script src="js/parseMaster.js"></script>
   <script src="js/parseProgress.js"></script>
   <script src="js/views/upload-master.js"></script>
