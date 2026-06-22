@@ -177,11 +177,20 @@
                 <option value="FCCU">FCCU</option>
               </select>
             </label>
-            <label>System
-              <select id="filter-system">
-                <option value="">ทั้งหมด</option>
-              </select>
-            </label>
+            <div class="ms-dropdown" id="filter-system">
+              <span class="ms-label-cap">System</span>
+              <button type="button" class="ms-toggle" aria-expanded="false">
+                <span class="ms-toggle-label">ทั้งหมด</span>
+                <span class="ms-caret">▾</span>
+              </button>
+              <div class="ms-panel" hidden>
+                <div class="ms-actions">
+                  <button type="button" data-ms="all">เลือกทั้งหมด</button>
+                  <button type="button" data-ms="none">ล้าง</button>
+                </div>
+                <div class="ms-options"></div>
+              </div>
+            </div>
             <label>Discipline
               <select id="filter-discipline">
                 <option value="">ทั้งหมด</option>

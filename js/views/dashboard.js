@@ -82,7 +82,7 @@
     progress: [],
     expandedProjects: new Set(["CDU-1", "FCCU"]),
     expandedSystems: new Set(),
-    filter: { project: "", system: "", discipline: "", search: "", sort: "progress-asc" },
+    filter: { project: "", systems: [], discipline: "", search: "", sort: "progress-asc" },
     tagSort: { col: "tag", dir: "asc" }, // sort state for the tag drill-down tables (global, applied to all)
   };
 
@@ -134,21 +134,21 @@
       const actual = +rec.actual || 0;
 
       const systems = tagSystems.get(rec.project + "|" + rec.tag) || [];
-      // Apply System filter: keep only records whose tag maps to the chosen system
-      // (or has no mapping when "__UNMAPPED__" is chosen).
-      if (state.filter.system) {
-        if (state.filter.system === "__UNMAPPED__") {
-          if (systems.length) continue;
-        } else if (!systems.includes(state.filter.system)) {
+      // Apply System filter (multi-select, OR semantics): keep records whose tag maps to
+      // ANY selected system, or unmapped records when "__UNMAPPED__" is among the selection.
+      // Empty selection = no system filter (show all).
+      const sel = state.filter.systems;
+      if (sel.length) {
+        if (systems.length) {
+          if (!systems.some((s) => sel.includes(s))) continue;
+        } else if (!sel.includes("__UNMAPPED__")) {
           continue;
         }
       }
-      // When a specific system is chosen, only contribute to that single bucket
-      // (tag-in-multiple-systems shouldn't fan out to siblings while filtered).
+      // When systems are selected, only contribute to the selected buckets
+      // (tag-in-multiple-systems shouldn't fan out to unselected siblings while filtered).
       const buckets = systems.length
-        ? (state.filter.system && state.filter.system !== "__UNMAPPED__"
-            ? [state.filter.system]
-            : systems)
+        ? (sel.length ? systems.filter((s) => sel.includes(s)) : systems)
         : ["__UNMAPPED__"];
       const target = systems.length ? proj.systems : proj.unmapped;
       for (const sys of buckets) {
@@ -292,29 +292,49 @@
     }
   }
 
-  // Populate the System dropdown from master.systems (filtered by current Project filter).
-  // Also validates state.filter.system: clears it if no longer present in the new option list
-  // (e.g. user changed Project so the previously-selected system isn't available anymore).
+  // Populate the System multi-select dropdown from master.systems (filtered by current Project filter).
+  // Also validates state.filter.systems: drops any selected system no longer present in the new
+  // option list (e.g. user changed Project) — "__UNMAPPED__" is always kept as a valid choice.
   function renderSystemFilter() {
-    const sel = $("filter-system");
-    if (!sel) return;
+    const root = $("filter-system");
+    if (!root) return;
     const projectFilter = state.filter.project;
     const systemsSet = new Set();
     for (const m of state.masters) {
       if (projectFilter && m.project !== projectFilter) continue;
       for (const s of (m.systems || [])) systemsSet.add(s);
     }
+    // Drop stale selections (system gone after a Project change); always keep __UNMAPPED__.
+    state.filter.systems = state.filter.systems.filter(
+      (s) => s === "__UNMAPPED__" || systemsSet.has(s)
+    );
+    const selectedSet = new Set(state.filter.systems);
+
     const sorted = Array.from(systemsSet).sort(systemSort);
-    const opts = ['<option value="">ทั้งหมด</option>'];
+    const rows = [];
     for (const s of sorted) {
-      opts.push(`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`);
+      rows.push(
+        `<label><input type="checkbox" value="${escapeHtml(s)}"${selectedSet.has(s) ? " checked" : ""}>` +
+        `<span>${escapeHtml(s)}</span></label>`
+      );
     }
-    opts.push(`<option value="__UNMAPPED__">(ไม่ map กับ system ใด)</option>`);
-    sel.innerHTML = opts.join("");
-    if (state.filter.system && state.filter.system !== "__UNMAPPED__" && !systemsSet.has(state.filter.system)) {
-      state.filter.system = "";
+    rows.push(
+      `<label><input type="checkbox" value="__UNMAPPED__"${selectedSet.has("__UNMAPPED__") ? " checked" : ""}>` +
+      `<span>(ไม่ map กับ system ใด)</span></label>`
+    );
+    root.querySelector(".ms-options").innerHTML = rows.join("");
+
+    // Update the toggle button label: empty → "ทั้งหมด", 1 → name, >1 → "N systems".
+    const labelEl = root.querySelector(".ms-toggle-label");
+    const n = state.filter.systems.length;
+    if (n === 0) {
+      labelEl.textContent = "ทั้งหมด";
+    } else if (n === 1) {
+      labelEl.textContent = state.filter.systems[0] === "__UNMAPPED__"
+        ? "(unmapped)" : state.filter.systems[0];
+    } else {
+      labelEl.textContent = `${n} systems`;
     }
-    sel.value = state.filter.system;
   }
 
   function renderDisciplineFilter(allDisciplines) {
@@ -332,7 +352,9 @@
     const root = $("filter-chips");
     const chips = [];
     if (state.filter.project) chips.push({ label: `โครงการ: ${state.filter.project}`, key: "project" });
-    if (state.filter.system) chips.push({ label: `System: ${state.filter.system === "__UNMAPPED__" ? "(unmapped)" : state.filter.system}`, key: "system" });
+    for (const s of state.filter.systems) {
+      chips.push({ label: `System: ${s === "__UNMAPPED__" ? "(unmapped)" : s}`, key: "system:" + s });
+    }
     if (state.filter.discipline) chips.push({ label: `Discipline: ${state.filter.discipline}`, key: "discipline" });
     if (state.filter.search) chips.push({ label: `Search: ${state.filter.search}`, key: "search" });
     if (!chips.length) { root.innerHTML = ""; return; }
@@ -350,7 +372,7 @@
       for (const s of p.unmapped.values()) for (const t of s.tags.keys()) tagSet.add(p.project + "|" + t);
     }
     const totalProgress = state.progress.length;
-    const hasFilter = state.filter.project || state.filter.discipline || state.filter.search;
+    const hasFilter = state.filter.project || state.filter.systems.length || state.filter.discipline || state.filter.search;
     if (!totalProgress) {
       el.innerHTML = `<span class="muted">ยังไม่มี progression data — ลอง upload ก่อน</span>`;
       return;
@@ -609,7 +631,9 @@
 
   function onFilterChange() {
     state.filter.project = $("filter-project").value;
-    state.filter.system = $("filter-system").value;
+    state.filter.systems = Array.from(
+      $("filter-system").querySelectorAll(".ms-options input:checked")
+    ).map((cb) => cb.value);
     state.filter.discipline = $("filter-discipline").value;
     state.filter.search = $("filter-search").value.trim();
     state.filter.sort = $("filter-sort").value;
@@ -621,10 +645,13 @@
     if (!btn) return;
     const key = btn.dataset.clear;
     if (key === "all") {
-      state.filter.project = ""; state.filter.system = ""; state.filter.discipline = ""; state.filter.search = "";
-      $("filter-project").value = ""; $("filter-system").value = ""; $("filter-discipline").value = ""; $("filter-search").value = "";
+      state.filter.project = ""; state.filter.systems = []; state.filter.discipline = ""; state.filter.search = "";
+      $("filter-project").value = ""; $("filter-discipline").value = ""; $("filter-search").value = "";
     } else if (key === "project") { state.filter.project = ""; $("filter-project").value = ""; }
-    else if (key === "system") { state.filter.system = ""; $("filter-system").value = ""; }
+    else if (key.startsWith("system:")) {
+      const val = key.slice("system:".length);
+      state.filter.systems = state.filter.systems.filter((s) => s !== val);
+    }
     else if (key === "discipline") { state.filter.discipline = ""; $("filter-discipline").value = ""; }
     else if (key === "search") { state.filter.search = ""; $("filter-search").value = ""; }
     render();
@@ -680,10 +707,40 @@
     XLSX.writeFile(wb, `TOC1-MTA2026-progression-${stamp}.xlsx`);
   }
 
+  // System multi-select dropdown: toggle the panel, handle Select all / Clear,
+  // and close on outside click. Checkbox `change` events bubble to the container,
+  // which is wired to onFilterChange below.
+  function setupSystemDropdown() {
+    const root = $("filter-system");
+    const toggle = root.querySelector(".ms-toggle");
+    const panel = root.querySelector(".ms-panel");
+    const setOpen = (open) => {
+      panel.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      root.classList.toggle("open", open);
+    };
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setOpen(panel.hidden);
+    });
+    panel.addEventListener("click", (e) => {
+      const act = e.target.closest("[data-ms]");
+      if (!act) return;
+      const checks = panel.querySelectorAll(".ms-options input");
+      checks.forEach((cb) => { cb.checked = act.dataset.ms === "all"; });
+      onFilterChange();
+    });
+    // Close when clicking anywhere outside the dropdown.
+    document.addEventListener("click", (e) => {
+      if (!panel.hidden && !root.contains(e.target)) setOpen(false);
+    });
+  }
+
   function mount() {
     $("hierarchy").addEventListener("click", onToggle);
     $("filter-project").addEventListener("change", onFilterChange);
     $("filter-system").addEventListener("change", onFilterChange);
+    setupSystemDropdown();
     $("filter-discipline").addEventListener("change", onFilterChange);
     $("filter-sort").addEventListener("change", onFilterChange);
     $("filter-search").addEventListener("input", debounce(onFilterChange, 200));
